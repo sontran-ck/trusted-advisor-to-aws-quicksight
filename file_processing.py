@@ -72,8 +72,21 @@ class ExcelProcessing:
         if "Number of suppressed resources:" in df_sheet.iat[7,1]:
             number_of_suppressed_resources = df_sheet.iat[7,1].partition(':')[2].strip()
 
+        if status == "not_available":
+            return {
+                "check_title": title,
+                "account_id": account_id,
+                "description": None,
+                "status": "not_available",
+                "total_number_of_resources_processed": None,
+                "number_of_resources_flagged": None,
+                "number_of_suppressed_resources": None,
+                "source": None,
+                "alert_criteria": None,
+                "recommended_action": None,
+                "additional_resources": None
+            }
         return {
-            "sheet_name": sheet_name,
             "check_title": title,
             "account_id": account_id,
             "description": real_description,
@@ -199,5 +212,18 @@ class ExcelProcessing:
             json.dump(data, f, indent=4, ensure_ascii=False)
 
 
+
+class JsonProcessing:
+    def __init__(self, file_path):
+        self.file_path = file_path
+        self.data = self.read_json()
+
+    def read_json(self):
+        with open(self.file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    
+    def json_to_excel(self, output_file):
+        df = pd.read_json(output_file, lines=True)
+        df.to_excel(output_file, index=False)
 
 

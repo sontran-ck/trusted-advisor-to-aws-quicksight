@@ -1,4 +1,4 @@
-from file_processing import ExcelProcessing
+from file_processing import ExcelProcessing, JsonProcessing
                 
 if __name__ == "__main__":
     try:
@@ -7,5 +7,6 @@ if __name__ == "__main__":
         print(f"Error: {e}")
         raise e
     output = file_processing.excel_to_json()
-    flattened_output = file_processing.flatten_json_data(output)
-    file_processing.save_json(flattened_output, "all.json")
+    file_processing.save_json(output, "all.json")
+    json_processing = JsonProcessing("all.json")
+    json_processing.json_to_excel("new_all.xlsx")
