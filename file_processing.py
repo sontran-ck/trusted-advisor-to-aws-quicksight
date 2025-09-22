@@ -1,15 +1,16 @@
 import pandas as pd
 import re
 import json
+import copy
+
+import matplotlib.pyplot as plt
+from openpyxl import load_workbook
+from openpyxl.drawing.image import Image
+import os
 class ExcelProcessing:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        try: 
-            df = pd.read_excel(file_path, sheet_name=None, header=None)
-        except Exception as e:
-            print(f"Error reading excel file: {e}")
-            raise e
-        self.df = df
+    def __init__(self):
+        pass
+
 
     def read_file(self):
         with open(self.file_path, 'r') as file:
@@ -19,19 +20,19 @@ class ExcelProcessing:
         with open(self.file_path, 'w') as file:
             file.write(data)
 
-    def handle_rows(self,sheet_name,df_sheet):
+    def handle_rows(self,sheet_name,df_sheet, null_value=None):
         
         title = df_sheet.iat[0,0]
-        account_id = None
-        real_description = None
-        status = None
-        total_number_of_resources_processed = None
-        number_of_resources_flagged = None
-        number_of_suppressed_resources = None
-        source = None
-        alert_criteria = []
-        recommended_action = None
-        additional_resources = None
+        account_id = null_value
+        real_description = null_value
+        status = null_value
+        total_number_of_resources_processed = null_value
+        number_of_resources_flagged = null_value
+        number_of_suppressed_resources = null_value
+        source = null_value
+        alert_criteria = null_value
+        recommended_action = null_value
+        additional_resources = null_value
         
         if "AWS Account ID:" in df_sheet.iat[1,0]:
             account_id = df_sheet.iat[1,0].partition(':')[2].strip()
@@ -43,8 +44,8 @@ class ExcelProcessing:
             real_description = real_description_match[0].partition(":")[2].strip()
 
             # Chuẩn bị biến kết quả
-            source = recommended_action = additional_resources = None
-            alert_criteria = []
+            source = recommended_action = additional_resources = null_value
+            alert_criteria = null_value
 
             # Regex pattern tìm từng section
             pattern = re.compile(
@@ -57,7 +58,7 @@ class ExcelProcessing:
                 if section == "Source":
                     source = content.strip()
                 elif section == "Alert Criteria":
-                    alert_criteria = self.parse_alert_criteria(content.strip())
+                    alert_criteria = content.strip()
                 elif section == "Recommended Action":
                     recommended_action = content.strip()
                 elif section == "Additional Resources":
@@ -75,64 +76,41 @@ class ExcelProcessing:
         if status == "not_available":
             return {
                 "check_title": title,
-                "account_id": account_id,
-                "description": None,
+                # "account_id": account_id,
+                "description": null_value,
+                "total_number_of_resources_processed": null_value,
+                "number_of_resources_flagged": null_value,
+                "number_of_suppressed_resources": null_value,
+                "source": null_value,
+                "alert_criteria": null_value,
+                "recommended_action": null_value,
+                "additional_resources": null_value,
                 "status": "not_available",
-                "total_number_of_resources_processed": None,
-                "number_of_resources_flagged": None,
-                "number_of_suppressed_resources": None,
-                "source": None,
-                "alert_criteria": None,
-                "recommended_action": None,
-                "additional_resources": None
             }
         return {
             "check_title": title,
-            "account_id": account_id,
+            # "account_id": account_id,
             "description": real_description,
-            "status": status,
             "total_number_of_resources_processed": total_number_of_resources_processed,
             "number_of_resources_flagged": number_of_resources_flagged,
             "number_of_suppressed_resources": number_of_suppressed_resources,
             "source": source,
             "alert_criteria": alert_criteria,
             "recommended_action": recommended_action,
-            "additional_resources": additional_resources
+            "additional_resources": additional_resources,
+            "status": status
         }
 
-    def parse_alert_criteria(self, alert_criteria_text):
-        """
-        Parse alert criteria text into structured JSON format
-        Input: "Red: description\nYellow: description\nGreen: description"
-        Output: [{"level": "Red", "description": "description"}, ...]
-        """
-        if not alert_criteria_text or alert_criteria_text.strip() == "":
-            return []
-        
-        criteria_list = []
-        lines = alert_criteria_text.strip().split('\n')
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-                
-            # Tìm pattern "Color:" ở đầu dòng
-            color_match = re.match(r'^(Red|Yellow|Green):\s*(.+)$', line, re.IGNORECASE)
-            if color_match:
-                level = color_match.group(1).capitalize()
-                description = color_match.group(2).strip()
-                criteria_list.append({
-                    "level": level,
-                    "description": description
-                })
-        
-        return criteria_list
-
-    def excel_to_json(self):
+    def excel_to_json(self, file_path):
+        self.file_path = file_path
+        try: 
+            df = pd.read_excel(file_path, sheet_name=None, header=None)
+        except Exception as e:
+            print(f"Error reading excel file: {e}")
+            raise e
         output = []
-        for sheet_name, df_sheet in self.df.items():
-            output.append(self.handle_rows(sheet_name,df_sheet))  
+        for sheet_name, df_sheet in df.items():
+            output.append(self.handle_rows(sheet_name,df_sheet, None))
         return output
 
     def flatten_json_data(self, data):
@@ -214,16 +192,165 @@ class ExcelProcessing:
 
 
 class JsonProcessing:
-    def __init__(self, file_path):
+    def __init__(self):
+        pass
+
+    def read_json_file(self, file_path):
         self.file_path = file_path
-        self.data = self.read_json()
-
-    def read_json(self):
         with open(self.file_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            self.pd_data = pd.read_json(f)
+
     
-    def json_to_excel(self, output_file):
-        df = pd.read_json(output_file, lines=True)
-        df.to_excel(output_file, index=False)
+    def save_excel(self, data, output_file):
+        pd_data = pd.DataFrame(data)
+        pd_data.to_excel(output_file, sheet_name='Table 1', index=False)
 
+    def parse_alert_criteria(self, alert_criteria_text):
+        """
+        Parse alert criteria text into structured JSON format
+        Input: "Red: description\nYellow: description\nGreen: description\nBlue: description"
+        Output: [{"level": "Red", "description": "description"}, ...]
+        """
+        if not alert_criteria_text or alert_criteria_text.strip() == "":
+            return []
+        
+        criteria_list = []
+        lines = alert_criteria_text.strip().split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Tìm pattern "Color:" ở đầu dòng
+            color_match = re.match(r'^(Red|Yellow|Green|Blue):\s*(.+)$', line, re.IGNORECASE)
+            if color_match:
+                level = color_match.group(1).capitalize()
+                description = color_match.group(2).strip()
+                criteria_list.append({
+                    "level": level,
+                    "description": description
+                })
+        
+        return criteria_list
 
+    def get_parse_data(self, data):
+        copy_data = copy.deepcopy(data)
+        for record in copy_data:
+            if record.get('alert_criteria'):
+                record['alert_criteria'] = self.parse_alert_criteria(record['alert_criteria'])
+        return copy_data
+
+    def summary_alert_criteria(self, parse_data):
+        """
+        Summary alert criteria
+        Args:
+            parse_data: List of dictionaries of parse data 
+        Returns:
+            Summary alert criteria
+        """
+        summary_alert_criteria = {
+            "Green": 0,
+            "Blue": 0,
+            "Yellow": 0,
+            "Red": 0,
+            # "Total": 0
+        }
+        for record in parse_data:
+            if record.get('alert_criteria'):
+                for criterion in record['alert_criteria']:
+                    summary_alert_criteria[criterion['level']] += 1
+                    # summary_alert_criteria['Total'] += 1
+        return summary_alert_criteria
+
+    def insert_data_detail_alert_criteria(self, extracted_json_data, null_value = None):
+        """
+        Insert data detail alert criteria
+        Args:
+            extracted_json_data: List of dictionaries of extracted json data
+        Returns:
+            Insert data detail alert criteria
+        """
+        output = []
+        parse_data = self.get_parse_data(extracted_json_data)
+        
+        copy_data = copy.deepcopy(extracted_json_data)
+        for index, record in enumerate(copy_data):
+            record['green_alert_criteria'] = null_value
+            record['blue_alert_criteria'] = null_value
+            record['yellow_alert_criteria'] = null_value
+            record['red_alert_criteria'] = null_value
+            if parse_data[index].get('alert_criteria'):
+                record['green_alert_criteria'] = False
+                record['blue_alert_criteria'] = False
+                record['yellow_alert_criteria'] = False
+                record['red_alert_criteria'] = False
+                for criterion in parse_data[index]['alert_criteria']:
+                    level = criterion['level']
+                    if level == 'Green':
+                        record['green_alert_criteria'] = True
+                    elif level == 'Yellow':
+                        record['yellow_alert_criteria'] = True
+                    elif level == 'Red':
+                        record['red_alert_criteria'] = True
+                    elif level == 'Blue':
+                        record['blue_alert_criteria'] = True
+
+            output.append(record)
+        return output
+
+    def create_chart_alert_criteria(summary_alert_criteria, file_path, output_file):
+        workbook = load_workbook(file_path)
+        # append sheet
+        sheet = workbook.create_sheet("Summary Alert Criteria")
+        sheet.cell(row=1, column=1).value = "Alert Criteria"
+        sheet.cell(row=1, column=2).value = "Count"
+        for i, (key, value) in enumerate(summary_alert_criteria.items(), start=2):
+            sheet.cell(row=i, column=1).value = key
+            sheet.cell(row=i, column=2).value = value
+        # Tạo pie chart với matplotlib để có thể thiết lập màu sắc chính xác
+        labels = list(summary_alert_criteria.keys())
+        values = list(summary_alert_criteria.values())
+        
+        # Thiết lập màu sắc phù hợp với tên key
+        color_mapping = {
+            "Red": "#FF0000",      # Đỏ
+            "Blue": "#0000FF",     # Xanh dương  
+            "Green": "#00FF00",    # Xanh lá
+            "Yellow": "#FFFF00"    # Vàng
+        }
+        
+        # Tạo danh sách màu sắc theo thứ tự của labels
+        colors = []
+        for label in labels:
+            if label in color_mapping:
+                colors.append(color_mapping[label])
+            else:
+                colors.append("#808080")  # Màu xám mặc định cho key không có trong mapping
+        
+        # Tạo pie chart với matplotlib
+        plt.figure(figsize=(8, 6))
+        plt.pie(values, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
+        plt.title("Alert Criteria")
+        plt.axis('equal')  # Đảm bảo biểu đồ tròn
+        
+        # Lưu biểu đồ thành file ảnh
+        chart_filename = "alert_criteria_pie_chart.png"
+        plt.savefig(chart_filename, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Chèn ảnh vào Excel
+        img = Image(chart_filename)
+        img.width = 400  # Điều chỉnh kích thước
+        img.height = 300
+        sheet.add_image(img, "D1")
+        
+        print(f"Pie chart created with colors: {dict(zip(labels, colors))}")
+        
+        workbook.save(output_file)
+        
+        # Dọn dẹp file ảnh tạm thời
+        
+        if os.path.exists(chart_filename):
+            os.remove(chart_filename)
+            print(f"Temporary chart file {chart_filename} removed")
